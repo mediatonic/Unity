@@ -95,7 +95,16 @@ namespace GitHub.Unity
                 return null;
 
             GitLock lck;
-            var repositoryPath = environment.GetRepositoryPath(assetPath.ToNPath());
+			var npath = assetPath.ToNPath();
+			var packageInfo = UnityEditor.PackageManager.PackageInfo.FindForAssetPath(assetPath);
+			NPath assetNPath = assetPath.ToNPath();
+			if (packageInfo != null)
+			{
+				var packagePath = packageInfo.resolvedPath.ToNPath();
+				assetNPath = System.IO.Path.GetFullPath(assetPath).ToNPath();
+				assetNPath = assetNPath.RelativeTo(Application.dataPath.ToNPath().Parent);
+			}
+            var repositoryPath = environment.GetRepositoryPath(assetNPath);
             if (locks.TryGetValue(repositoryPath, out lck))
                 return lck;
             return null;
