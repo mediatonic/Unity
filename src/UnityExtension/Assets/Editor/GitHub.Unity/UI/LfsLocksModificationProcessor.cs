@@ -95,7 +95,15 @@ namespace GitHub.Unity
                 return null;
 
             GitLock lck;
-            var npath = assetPath.ToNPath();
+            NPath assetNPath = FixPackagePath(assetPath);
+            var repositoryPath = environment.GetRepositoryPath(assetNPath);
+            if (locks.TryGetValue(repositoryPath, out lck))
+                return lck;
+            return null;
+        }
+
+        private static NPath FixPackagePath(string assetPath)
+        {
             var packageInfo = UnityEditor.PackageManager.PackageInfo.FindForAssetPath(assetPath);
             NPath assetNPath = assetPath.ToNPath();
             if (packageInfo != null)
@@ -104,10 +112,8 @@ namespace GitHub.Unity
                 assetNPath = System.IO.Path.GetFullPath(assetPath).ToNPath();
                 assetNPath = assetNPath.RelativeTo(Application.dataPath.ToNPath().Parent);
             }
-            var repositoryPath = environment.GetRepositoryPath(assetNPath);
-            if (locks.TryGetValue(repositoryPath, out lck))
-                return lck;
-            return null;
+
+            return assetNPath;
         }
 
         private static void InspectorHeaderFinished(Editor editor)
