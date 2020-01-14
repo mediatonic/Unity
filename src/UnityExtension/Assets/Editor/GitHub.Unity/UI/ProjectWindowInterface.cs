@@ -203,26 +203,37 @@ namespace GitHub.Unity
         }
 
         private static bool IsObjectUnlocked(Object selected)
-        {
-            if (selected == null)
-                return false;
+		{
+			if (selected == null)
+				return false;
 
-            NPath assetPath = AssetDatabase.GetAssetPath(selected.GetInstanceID()).ToNPath();
-            NPath repositoryPath = manager.Environment.GetRepositoryPath(assetPath);
+			NPath assetPath = GetRelativePath(selected);
+			NPath repositoryPath = manager.Environment.GetRepositoryPath(assetPath);
 
-            var alreadyLocked = locks.Any(x => repositoryPath == x.Path);
-            if (alreadyLocked)
-                return false;
+			var alreadyLocked = locks.Any(x => repositoryPath == x.Path);
+			if (alreadyLocked)
+				return false;
 
-            GitFileStatus status = GitFileStatus.None;
-            if (entries != null)
-            {
-                status = entries.FirstOrDefault(x => repositoryPath == x.Path.ToNPath()).Status;
-            }
-            return status != GitFileStatus.Untracked && status != GitFileStatus.Ignored;
-        }
+			GitFileStatus status = GitFileStatus.None;
+			if (entries != null)
+			{
+				status = entries.FirstOrDefault(x => repositoryPath == x.Path.ToNPath()).Status;
+			}
+			return status != GitFileStatus.Untracked && status != GitFileStatus.Ignored;
+		}
 
-        private static bool IsObjectLocked(Object selected)
+		private static NPath GetRelativePath(Object selected)
+		{
+			string assetDatabasePath = AssetDatabase.GetAssetPath(selected.GetInstanceID());
+			string absoluteFilePath = System.IO.Path.GetFullPath(assetDatabasePath);
+			Uri assetDatabaseUri = new Uri(absoluteFilePath, UriKind.Absolute);
+			Uri relativeTo = new Uri(Application.dataPath);
+			string assetPathString = relativeTo.MakeRelative(assetDatabaseUri);
+			NPath assetPath = assetPathString.ToNPath();
+			return assetPath;
+		}
+
+		private static bool IsObjectLocked(Object selected)
         {
             return IsObjectLocked(selected, false);
         }
@@ -232,7 +243,7 @@ namespace GitHub.Unity
             if (selected == null)
                 return false;
 
-            NPath assetPath = AssetDatabase.GetAssetPath(selected.GetInstanceID()).ToNPath();
+            NPath assetPath = GetRelativePath(selected);
             NPath repositoryPath = manager.Environment.GetRepositoryPath(assetPath);
 
             return locks.Any(x => repositoryPath == x.Path && (!isLockedByCurrentUser || x.Owner.Name == currentUsername));
@@ -240,7 +251,7 @@ namespace GitHub.Unity
 
         private static ITask CreateUnlockObjectTask(Object selected, bool force)
         {
-            NPath assetPath = AssetDatabase.GetAssetPath(selected.GetInstanceID()).ToNPath();
+			NPath assetPath = GetRelativePath(selected);
             NPath repositoryPath = manager.Environment.GetRepositoryPath(assetPath);
 
             var task = Repository.ReleaseLock(repositoryPath, force);
@@ -250,7 +261,7 @@ namespace GitHub.Unity
 
         private static ITask CreateLockObjectTask(Object selected)
         {
-            NPath assetPath = AssetDatabase.GetAssetPath(selected.GetInstanceID()).ToNPath();
+			NPath assetPath = GetRelativePath(selected);
             NPath repositoryPath = manager.Environment.GetRepositoryPath(assetPath);
 
             var task = Repository.RequestLock(repositoryPath);
@@ -265,6 +276,31 @@ namespace GitHub.Unity
             {
                 NPath repositoryPath = lck.Path;
                 NPath assetPath = manager.Environment.GetAssetPath(repositoryPath);
+
+				var req = UnityEditor.PackageManager.Client.List(true, true);
+				while (!req.IsCompleted)
+				{
+
+				}
+
+				var absoluteAssetPath = System.IO.Path.GetFullPath(assetPath);
+				var absoluteUri = new Uri(absoluteAssetPath, UriKind.Absolute);
+
+				foreach (var package in req.Result)
+				{
+					var path = package.resolvedPath;
+					if (!path.EndsWith("/"))
+					{
+						path += "/";
+					}
+					var packageUri = new Uri(path, UriKind.Absolute);
+					if (packageUri.IsBaseOf(absoluteUri))
+					{
+						var relative = packageUri.MakeRelative(absoluteUri);
+						assetPath = System.IO.Path.Combine(package.assetPath, relative).ToNPath();
+						break;
+					}
+				}
 
                 var g = AssetDatabase.AssetPathToGUID(assetPath);
                 guidsLocks.Add(g);
