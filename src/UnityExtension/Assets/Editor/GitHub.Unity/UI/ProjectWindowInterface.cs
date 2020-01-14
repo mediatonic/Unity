@@ -271,35 +271,14 @@ namespace GitHub.Unity
         private static void OnLocksUpdate()
         {
             guidsLocks.Clear();
+
+            UnityEditor.PackageManager.PackageCollection dependencies = GetAllPackageInfos();
+
             foreach (var lck in locks)
             {
                 NPath repositoryPath = lck.Path;
                 NPath assetPath = manager.Environment.GetAssetPath(repositoryPath);
-
-                var req = UnityEditor.PackageManager.Client.List(true, true);
-                while (!req.IsCompleted)
-                {
-
-                }
-
-                var absoluteAssetPath = System.IO.Path.GetFullPath(assetPath);
-                var absoluteUri = new Uri(absoluteAssetPath, UriKind.Absolute);
-
-                foreach (var package in req.Result)
-                {
-                    var path = package.resolvedPath;
-                    if (!path.EndsWith("/"))
-                    {
-                        path += "/";
-                    }
-                    var packageUri = new Uri(path, UriKind.Absolute);
-                    if (packageUri.IsBaseOf(absoluteUri))
-                    {
-                        var relative = packageUri.MakeRelative(absoluteUri);
-                        assetPath = System.IO.Path.Combine(package.assetPath, relative).ToNPath();
-                        break;
-                    }
-                }
+                assetPath = FixPackagePath(assetPath, dependencies);
 
                 var g = AssetDatabase.AssetPathToGUID(assetPath);
                 guidsLocks.Add(g);
@@ -314,6 +293,36 @@ namespace GitHub.Unity
             
             //EditorApplication.RepaintProjectWindow();
             UnityEditorInternal.InternalEditorUtility.RepaintAllViews();
+        }
+
+        private static UnityEditor.PackageManager.PackageCollection GetAllPackageInfos()
+        {
+            var req = UnityEditor.PackageManager.Client.List(true, true);
+            while (!req.IsCompleted)
+            {
+                // block til complete
+            }
+
+            return req.Result;
+        }
+
+        private static NPath FixPackagePath(NPath assetPath, UnityEditor.PackageManager.PackageCollection dependencies)
+        {
+            NPath absoluteAssetPath = manager.Environment.UnityProjectPath.Combine(assetPath);
+
+            foreach (var package in dependencies)
+            {
+                NPath packagePath = package.resolvedPath.ToNPath();
+                if (absoluteAssetPath.IsChildOf(packagePath))
+                {
+                    NPath relativeToPackagePath = absoluteAssetPath.RelativeTo(packagePath);
+                    NPath packageAssetPath = package.assetPath.ToNPath();
+                    assetPath = packageAssetPath.Combine(relativeToPackagePath);
+                    break;
+                }
+            }
+
+            return assetPath;
         }
 
         private static void OnStatusUpdate()
