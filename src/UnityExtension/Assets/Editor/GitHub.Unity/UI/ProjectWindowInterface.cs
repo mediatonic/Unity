@@ -207,7 +207,7 @@ namespace GitHub.Unity
             if (selected == null)
                 return false;
 
-            NPath assetPath = GetRelativePath(selected);
+            NPath assetPath = ResolveObjectPath(selected);
             NPath repositoryPath = manager.Environment.GetRepositoryPath(assetPath);
 
             var alreadyLocked = locks.Any(x => repositoryPath == x.Path);
@@ -222,15 +222,14 @@ namespace GitHub.Unity
             return status != GitFileStatus.Untracked && status != GitFileStatus.Ignored;
         }
 
-        private static NPath GetRelativePath(Object selected)
+        private static NPath ResolveObjectPath(Object selected)
         {
+            // AssetDatabase paths may use virtual `Projects` folder, which won't exist outside Unity/in the filesystem
+            // so resolve relative to the project directory
             string assetDatabasePath = AssetDatabase.GetAssetPath(selected.GetInstanceID());
-            string absoluteFilePath = System.IO.Path.GetFullPath(assetDatabasePath);
-            Uri assetDatabaseUri = new Uri(absoluteFilePath, UriKind.Absolute);
-            Uri relativeTo = new Uri(Application.dataPath);
-            string assetPathString = relativeTo.MakeRelative(assetDatabaseUri);
-            NPath assetPath = assetPathString.ToNPath();
-            return assetPath;
+            NPath absoluteFilePath = System.IO.Path.GetFullPath(assetDatabasePath).ToNPath();
+            NPath relativePath = absoluteFilePath.RelativeTo(manager.Environment.UnityProjectPath);
+            return relativePath;
         }
 
         private static bool IsObjectLocked(Object selected)
@@ -243,7 +242,7 @@ namespace GitHub.Unity
             if (selected == null)
                 return false;
 
-            NPath assetPath = GetRelativePath(selected);
+            NPath assetPath = ResolveObjectPath(selected);
             NPath repositoryPath = manager.Environment.GetRepositoryPath(assetPath);
 
             return locks.Any(x => repositoryPath == x.Path && (!isLockedByCurrentUser || x.Owner.Name == currentUsername));
@@ -251,7 +250,7 @@ namespace GitHub.Unity
 
         private static ITask CreateUnlockObjectTask(Object selected, bool force)
         {
-            NPath assetPath = GetRelativePath(selected);
+            NPath assetPath = ResolveObjectPath(selected);
             NPath repositoryPath = manager.Environment.GetRepositoryPath(assetPath);
 
             var task = Repository.ReleaseLock(repositoryPath, force);
@@ -261,7 +260,7 @@ namespace GitHub.Unity
 
         private static ITask CreateLockObjectTask(Object selected)
         {
-            NPath assetPath = GetRelativePath(selected);
+            NPath assetPath = ResolveObjectPath(selected);
             NPath repositoryPath = manager.Environment.GetRepositoryPath(assetPath);
 
             var task = Repository.RequestLock(repositoryPath);
