@@ -104,13 +104,16 @@ namespace GitHub.Unity
 
         private static NPath FixPackagePath(string assetPath)
         {
-            var packageInfo = UnityEditor.PackageManager.PackageInfo.FindForAssetPath(assetPath);
             NPath assetNPath = assetPath.ToNPath();
-            if (packageInfo != null)
+            if (!string.IsNullOrEmpty(assetPath))
             {
-                var packagePath = packageInfo.resolvedPath.ToNPath();
-                assetNPath = System.IO.Path.GetFullPath(assetPath).ToNPath();
-                assetNPath = assetNPath.RelativeTo(Application.dataPath.ToNPath().Parent);
+                var packageInfo = UnityEditor.PackageManager.PackageInfo.FindForAssetPath(assetPath);
+                if (packageInfo != null)
+                {
+                    var packagePath = packageInfo.resolvedPath.ToNPath();
+                    assetNPath = System.IO.Path.GetFullPath(assetPath).ToNPath();
+                    assetNPath = assetNPath.RelativeTo(Application.dataPath.ToNPath().Parent);
+                }
             }
 
             return assetNPath;
